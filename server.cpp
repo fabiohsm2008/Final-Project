@@ -8,102 +8,90 @@ using namespace std;
 
 #define bufflen 1000
 
-struct clientConnection{
-    sockaddr_in client;
-    vector<char[bufflen]> messagge;
-    bool operator ==(clientConnection comp){
-        if(client.sin_addr.s_addr == comp.client.sin_addr.s_addr && client.sin_port == comp.client.sin_port)
-            return true;
-        return false;
+struct Packet{
+    char p[bufflen];
+    Packet(char buffer[bufflen]){
+        strncpy(p, buffer, bufflen);
     }
 };
 
-char* fec(char buffer1[bufflen], char buffer2[bufflen]){
-    char bufferResult[bufflen];
-    for(int i = 0; i < bufflen; ++i){
-        bufferResult[i] == buffer1[i] ^ buffer2[i];
+struct clientConnection{
+    sockaddr_in client;
+    socklen_t l;
+    vector<Packet> message;
+    bool operator ==(sockaddr_in comp){
+        if(client.sin_addr.s_addr == comp.sin_addr.s_addr && client.sin_port == comp.sin_port)
+            return true;
+        return false;
     }
-    return bufferResult;
-}
-
-void error( char *msg)
-{
-    perror(msg);
-    exit(EXIT_FAILURE);
-}
-
-bool findClient(vector<sockaddr_in> clients, sockaddr_in client){
-    for(int i = 0; i < clients.size(); ++i){
-        if(clients[i].sin_addr.s_addr == client.sin_addr.s_addr && clients[i].sin_port == client.sin_port) return true;
+    clientConnection(sockaddr_in c){
+        client = c;
+        l = sizeof(client);
     }
-    return false;
-}
+};
 
-void sender(int sockfd, sockaddr_in client){
-    socklen_t m = sizeof(client);
-    string msg;
-    cout << "Ready for send messagges" << endl;
-    while (true){
-        cin >> msg;
-        sendto(sockfd, msg.c_str(), msg.size(), 0, (struct sockaddr *)&client, m);
+class Server{
+private:
+    int sockfd;
+    sockaddr_in serv;
+    socklen_t l;
+    vector<clientConnection> clients;
+public:
+    bool running;
+    Server(int port){
+        sockfd = socket(AF_INET,SOCK_DGRAM,0);
+        serv.sin_family = AF_INET;
+        serv.sin_port = htons(port);
+        serv.sin_addr.s_addr = INADDR_ANY;
+        bind(sockfd, (const struct sockaddr *)&serv, sizeof(serv));
+        running = true;
+        thread r(&Server::connectClient, this);
+        r.join();
     }
-}
 
-void receiver(int sockfd, sockaddr_in client){
-    char buffer[bufflen];
-    bzero(buffer, bufflen);
-    socklen_t l = sizeof(client);
-    cout << "Ready for read messagges" << endl;
-    while (true){
-        if(recvfrom(sockfd, buffer, bufflen, 0, (struct sockaddr *)&client, &l) > 0){
-            cout << buffer << endl;
-            bzero(buffer, bufflen);
-        };
-    }
-}
-
-void connectClient(int sockfd, sockaddr_in client){
-    vector<sockaddr_in> clients;
-
-    char buffer[bufflen];
-    bzero(buffer, bufflen);
-    socklen_t l = sizeof(client);
-    ofstream file2("testServer.txt");
-    while (true)
-    {
-        recvfrom(sockfd, buffer, bufflen, 0, (struct sockaddr *)&client, &l);
-        file2.write(buffer, bufflen);
-        bzero(buffer, bufflen);
-        if( !findClient(clients, client) ){
-            clients.push_back(client);
-            /*thread r(receiver, sockfd, client);
-            thread s(sender, sockfd, client);
-            r.detach();
-            s.detach();*/
+    int findClient(sockaddr_in client){
+        for(int i = 0; i < clients.size(); ++i){
+            if(clients[i] == client) 
+                return i;
         }
-        cout << clients.size() << endl;
+        return -1;
     }
-}
+
+    void connectClient(){
+        sockaddr_in client;
+        char buffer[bufflen];
+        bzero(buffer, bufflen);
+        socklen_t l = sizeof(client);
+        while (true)
+        {
+            recvfrom(sockfd, buffer, bufflen, 0, (struct sockaddr *)&client, &l);
+            cout << "**********" << buffer << endl;
+            int pos = findClient(client);
+            if(pos == -1){
+                clientConnection c(client);
+                Packet p(buffer);
+                c.message.push_back(p);
+                clients.push_back(c);
+            }
+            else {
+                clients[pos].message.push_back(buffer);
+            }
+        }
+    }
+
+    void send(char buffer[bufflen], clientConnection client){
+        socklen_t m = sizeof(client.client);
+        sendto(sockfd, buffer, bufflen, 0, (struct sockaddr *)&client.client, m);
+        bzero(buffer, bufflen);
+    }
+};
 
 int main()
 {
-    int sockfd;
-    sockfd = socket(AF_INET,SOCK_DGRAM,0);
-    struct sockaddr_in serv,client;
+    Server s(8080);
 
-    serv.sin_family = AF_INET;
-    serv.sin_port = htons(8080);
-    serv.sin_addr.s_addr = inet_addr("127.0.0.1");
+    while(s.running);
 
-    bind(sockfd, (const struct sockaddr *)&serv, sizeof(serv));
-
-    /*thread c(connectClient, sockfd, client);
-    c.join();*/
-
-    char b[bufflen] = "hola";
-    char b2[bufflen] = "como";
-
-    fec(b, b2);
 
     return 0;
 }

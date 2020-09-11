@@ -1,5 +1,6 @@
 #include <iostream>
 #include <fstream>
+#include <unistd.h>
 #include "UDPLibrary.h"
 
 using namespace std;
@@ -19,6 +20,10 @@ public:
         serv.sin_addr.s_addr = inet_addr(ip.c_str());
         l = sizeof(client);
         m = sizeof(serv);
+
+        thread r(&Client::receiver, this);
+        r.detach();
+
     }
 
     void sendFile(string fileName){
@@ -30,10 +35,27 @@ public:
         bzero(buffer, bufflen);
 
         while(file.read(buffer, bufflen) || file.gcount()){
-            sendto(sockfd, buffer, bufflen, 0, (struct sockaddr *)&serv, m);
-            bzero(buffer, bufflen);
+            send(buffer);
         }
 
+    }
+
+    void receiver(){
+        char buffer[bufflen];
+        while (true){
+            read(buffer);
+            cout << "Mensaje recibido: " << buffer << endl;
+        }
+    }
+
+    void send(char buffer[bufflen]){
+        sendto(sockfd, buffer, bufflen, 0, (struct sockaddr *)&serv, m);
+        bzero(buffer, bufflen);
+    }
+
+    void read(char buffer[bufflen]){
+        bzero(buffer, bufflen);
+        recvfrom(sockfd, buffer, bufflen, 0, (struct sockaddr *)&client, &l);
     }
 
     void fec(char buffer1[bufflen], char buffer2[bufflen], char bufferResult[bufflen]){
@@ -41,48 +63,28 @@ public:
             bufferResult[i] == buffer1[i] ^ buffer2[i];
         }
     }
+
+    unsigned short crc16(char* numPacket, unsigned char length) {
+        unsigned char x;
+        unsigned short crc = 0xFFFF;
+
+        while (length--) {
+            x = crc >> 8 ^ *numPacket++;
+            x ^= x >> 4;
+            crc = (crc << 8) ^ ((unsigned short)(x << 12)) ^ ((unsigned short)(x << 5)) ^ ((unsigned short)x);
+        }
+        return crc;
+    }
+
 };
-
-
-void error(char *msg)
-{
-    perror(msg);
-    exit(EXIT_FAILURE);
-}
-
-void sender(int sockfd, sockaddr_in serv){
-    socklen_t m = sizeof(serv);
-    string msg;
-    cout << "Ready for send messagges" << endl;
-    while (true){
-        cin >> msg;
-        sendto(sockfd, msg.c_str(), msg.size(), 0, (struct sockaddr *)&serv, m);
-    }
-}
-
-void receiver(int sockfd, sockaddr_in client){
-    char buffer[bufflen];
-    bzero(buffer, bufflen);
-    socklen_t l = sizeof(client);
-    cout << "Ready for read messagges" << endl;
-    while (true){
-        recvfrom(sockfd, buffer, bufflen, 0, (struct sockaddr *)&client, &l);
-        cout << "Mensaje recibido: " << buffer << endl;
-        bzero(buffer, bufflen);
-    }
-    
-}
-
-void buildMsg(){
-
-}
 
 int main()
 {
     Client r(8080, "127.0.0.1");
-    char buffer[10] = "hola";
-    char buffer2[10] = "como";
-    char buffer3[10];
-    r.fec(buffer, buffer2, buffer3);
+    char buffer[bufflen] = "Enviando mensaje";
+    cout << r.crc16(buffer, bufflen) << endl;
+
+    cout << getpid() << endl;
+
     return 0;
 }

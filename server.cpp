@@ -19,6 +19,8 @@ struct clientConnection{
     sockaddr_in client;
     socklen_t l;
     vector<Packet> message;
+    vector<Packet> fecs;
+    int size;
     bool operator ==(sockaddr_in comp){
         if(client.sin_addr.s_addr == comp.sin_addr.s_addr && client.sin_port == comp.sin_port)
             return true;
@@ -27,6 +29,14 @@ struct clientConnection{
     clientConnection(sockaddr_in c){
         client = c;
         l = sizeof(client);
+        thread t(timeout);
+        t.detach();
+    }
+    void timeout(){
+        sleep(5000);
+        if(message.size() != size){
+            cout << "Diferentes tamanios" << endl;
+        }
     }
 };
 
@@ -60,12 +70,13 @@ public:
     void connectClient(){
         sockaddr_in client;
         char buffer[bufflen];
-        bzero(buffer, bufflen);
         socklen_t l = sizeof(client);
+        ofstream file("testServer.txt", ofstream::out | ofstream::trunc);
         while (true)
         {
+            bzero(buffer, bufflen);
             recvfrom(sockfd, buffer, bufflen, 0, (struct sockaddr *)&client, &l);
-            cout << "**********" << buffer << endl;
+            file << buffer;
             int pos = findClient(client);
             if(pos == -1){
                 clientConnection c(client);
@@ -75,6 +86,9 @@ public:
             }
             else {
                 clients[pos].message.push_back(buffer);
+                if( clients[pos].message.size() == 11 ){
+                    file.close();
+                }
             }
         }
     }
@@ -90,7 +104,20 @@ int main()
 {
     Server s(8080);
 
-    while(s.running);
+    int value;
+
+    while (s.running)
+    {
+        cout << "Ingrese un valor: ";
+        cin >> value;
+        if(value == 0){
+            cout << "Instruccion del servidor" << endl;
+        }
+        else if(value == 1){
+            cout << "Primer Valor" << endl;
+        }
+        else break;
+    }
 
 
     return 0;
